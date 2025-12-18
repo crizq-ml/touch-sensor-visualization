@@ -59,22 +59,27 @@ class MotionVisualizer:
         self.top_frame = tk.Frame(root, bg="#f1f3f4", padx=20, pady=20)
         self.top_frame.pack(fill=tk.X)
 
+        # X and Y limit initial values + monitoring
         self.x_limit_var = tk.StringVar(value="1600")
         self.y_limit_var = tk.StringVar(value="306")
         self.x_limit_var.trace_add("write", lambda *a: self.update_plot())
         self.y_limit_var.trace_add("write", lambda *a: self.update_plot())
 
+        # Plotting card
         input_box = tk.Frame(self.top_frame, bg="#f1f3f4")
         input_box.pack(side=tk.LEFT)
         
+        # X and Y limit input boxes& labels
         tk.Label(input_box, text="X MAX", font=("Segoe UI", 12, "bold"), bg="#f1f3f4", fg="#5f6368").grid(row=0, column=0)
         ttk.Entry(input_box, textvariable=self.x_limit_var, width=8, font=("Segoe UI", 14)).grid(row=0, column=1, padx=10)
         tk.Label(input_box, text="Y MAX", font=("Segoe UI", 12, "bold"), bg="#f1f3f4", fg="#5f6368").grid(row=0, column=2, padx=(10, 0))
         ttk.Entry(input_box, textvariable=self.y_limit_var, width=8, font=("Segoe UI", 14)).grid(row=0, column=3, padx=10)
        
+        # Action status updates
         self.action_label = tk.Label(self.top_frame, text="● READY", font=("Segoe UI", 14, "bold"), fg="#4285f4", bg="#f1f3f4")
         self.action_label.pack(side=tk.LEFT, padx=30)
 
+        # Action buttons
         ModernButton(self.top_frame, text="🗑️ CLEAR", color="#ffa3a3", command=self.clear_data).pack(side=tk.RIGHT, padx=5)
         ModernButton(self.top_frame, text="📁 EXPORT CSV", color="#f4ff91", command=self.export_csv).pack(side=tk.RIGHT, padx=5)
         ModernButton(self.top_frame, text="📷 SAVE PNG", color="#91faff", command=self.save_plot).pack(side=tk.RIGHT, padx=5)
@@ -82,22 +87,21 @@ class MotionVisualizer:
         # 2. PANED WINDOW
         self.paned_window = tk.PanedWindow(root, orient=tk.VERTICAL, bg="#f1f3f4", sashwidth=6, sashrelief=tk.FLAT)
         self.paned_window.pack(fill=tk.BOTH, expand=True, padx=20, pady=5)
-
         self.card_frame = tk.Frame(self.paned_window, bg="#f1f3f4")
+
+        # adding everything into the paned windows
         self.fig, self.ax = plt.subplots(figsize=(8, 5))
         self.canvas_widget = FigureCanvasTkAgg(self.fig, master=self.card_frame)
         self.canvas_widget.get_tk_widget().pack(fill=tk.BOTH, expand=True)
         self.paned_window.add(self.card_frame, minsize=400)
 
-        # 3. MODERN PLAYBACK CONTROLS
+        # 3. PLAYBACK CONTROLS
         self.playback_frame = tk.Frame(root, bg="#ffffff", padx=20, pady=15, highlightthickness=1, highlightbackground="#e0e0e0")
         self.playback_frame.pack(fill=tk.X, padx=20, pady=10)
 
-        self.play_btn = tk.Button(self.playback_frame, text="▶ PLAY", font=("Segoe UI", 10, "bold"), 
-                                 command=self.toggle_play, width=12, bg="#1a73e8", fg="white", 
-                                 activebackground="#1557b0", relief=tk.FLAT)
+        self.play_btn = ModernButton(self.playback_frame, text="▶ PLAY", color="#91faff", 
+                                    command=self.toggle_play, width=120, height=40)
         self.play_btn.pack(side=tk.LEFT, padx=5)
-
         self.slider_var = tk.DoubleVar(value=0)
 
         # Custom styled scale
@@ -126,13 +130,32 @@ class MotionVisualizer:
 
     def toggle_play(self):
         self.is_playing = not self.is_playing
-        self.play_btn.config(text="⏸ PAUSE" if self.is_playing else "▶ PLAY", 
-                            bg="#ea4335" if self.is_playing else "#1a73e8")
+        
         if self.is_playing:
+            # 1. Update the label
+            self.play_btn.itemconfig("text", text="⏸ PAUSE")
+            
+            # 2. Update the button's internal state so hover works correctly
+            self.play_btn.color = "#ffa3a3" 
+            self.play_btn.hover_color = self.play_btn._adjust_brightness("#ffa3a3", 1.1)
+            
+            # 3. Physically paint the button now
+            self.play_btn.itemconfig("button", fill="#ffa3a3")
+            
             if self.slider_var.get() >= len(self.all_events) - 1:
                 self.slider_var.set(0)
             self.run_realtime_autoplay()
-
+        else:
+            # 1. Update the label
+            self.play_btn.itemconfig("text", text="▶ PLAY")
+            
+            # 2. Reset the internal colors
+            self.play_btn.color = "#91faff"
+            self.play_btn.hover_color = self.play_btn._adjust_brightness("#91faff", 1.1)
+            
+            # 3. Physically paint the button
+            self.play_btn.itemconfig("button", fill="#91faff")
+        
     def run_realtime_autoplay(self):
         """Calculates the time difference between events to play back at true speed."""
         if not self.is_playing:
@@ -151,7 +174,7 @@ class MotionVisualizer:
             self.root.after(wait_ms, self.run_realtime_autoplay)
         else:
             self.is_playing = False
-            self.play_btn.config(text="▶ PLAY", bg="#1a73e8")
+            self.play_btn.config(text="▶ PLAY", bg="#91faff")
 
     def on_slider_move(self, event):
         total = len(self.all_events)

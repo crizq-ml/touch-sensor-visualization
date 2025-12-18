@@ -38,7 +38,7 @@ adb logcat -c && adb logcat -v brief -s MicroXRInputService:* > live_data.txt
 ### Terminal 2: Visualization
 Run the Python suite:
 ```bash
-python log_parser.py
+$env:PYTHONUNBUFFERED=1; py .\log_parser.py
 ```
 
 ## ⚙️ Configuration
@@ -51,3 +51,5 @@ python log_parser.py
 Ensure the slider is pushed to the far right. If you move it back to look at history, the "Live" follow mode is disabled. To re-enable it, simply slide back to the end or click the CLEAR button.
 **Permission Error**
 Do not worry about this error, it just happens because the adb logcat in the other terminal locks the txt file so the python script can't modify it.
+**Crashing error**
+You must close the app using Ctrl + C in the terminal used to open the python app rather than using the lose button in the top right. If you do not, the terminal will freeze. If this happens, just delete the terminal and open a new one.
