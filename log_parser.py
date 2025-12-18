@@ -13,7 +13,12 @@ import seaborn as sns
 import pandas as pd
 import numpy as np
 
-# --- MODERN BUTTON COMPONENT (RE-USED) ---
+# TODO
+# [ ] more tick marks on the graph
+# [ ] individual point selection
+# [ ] adb firmware version executed on button request
+
+# --- MODERN BUTTON COMPONENT ---
 class ModernButton(tk.Canvas):
     def __init__(self, parent, text, color="#1a73e8", command=None, width=150, height=50):
         super().__init__(parent, width=width+10, height=height+10, bg=parent['bg'], highlightthickness=0)
@@ -54,6 +59,7 @@ class MotionVisualizer:
         self.log_file = "live_data.txt"
         self.is_live = True  # The 'Global' Follow Variable
         self.is_playing = False
+        self.selected_point_idx = None
 
         # 1. TOP BAR
         self.top_frame = tk.Frame(root, bg="#f1f3f4", padx=20, pady=20)
@@ -83,6 +89,7 @@ class MotionVisualizer:
         ModernButton(self.top_frame, text="🗑️ CLEAR", color="#ffa3a3", command=self.clear_data).pack(side=tk.RIGHT, padx=5)
         ModernButton(self.top_frame, text="📁 EXPORT CSV", color="#f4ff91", command=self.export_csv).pack(side=tk.RIGHT, padx=5)
         ModernButton(self.top_frame, text="📷 SAVE PNG", color="#91faff", command=self.save_plot).pack(side=tk.RIGHT, padx=5)
+        ModernButton(self.top_frame, text="📋 COPY PNG", color="#ff91fa", command=self.copy_to_clipboard).pack(side=tk.RIGHT, padx=5)
 
         # 2. PANED WINDOW
         self.paned_window = tk.PanedWindow(root, orient=tk.VERTICAL, bg="#f1f3f4", sashwidth=6, sashrelief=tk.FLAT)
@@ -91,6 +98,9 @@ class MotionVisualizer:
 
         # adding everything into the paned windows
         self.fig, self.ax = plt.subplots(figsize=(8, 5))
+        self.fig.canvas.mpl_connect('pick_event', self.on_pick)
+        self.fig.canvas.mpl_connect('scroll_event', self.on_scroll)
+        self.fig.canvas.mpl_connect('button_press_event', self.on_canvas_click)
         self.canvas_widget = FigureCanvasTkAgg(self.fig, master=self.card_frame)
         self.canvas_widget.get_tk_widget().pack(fill=tk.BOTH, expand=True)
         self.paned_window.add(self.card_frame, minsize=400)
@@ -283,24 +293,56 @@ class MotionVisualizer:
             
             if 'x_0' in df_slice.columns:
                 d0 = df_slice.dropna(subset=['x_0', 'y_0'])
-                # Only plot if we have data
                 if not d0.empty:
+                    # Added picker=True to make dots clickable
                     self.ax.scatter(d0['x_0'], d0['y_0'], c=d0['timestamp_order'], 
-                                    cmap=p_map, s=120, edgecolors='white', alpha=0.7)
+                                    cmap=p_map, s=120, edgecolors='white', alpha=0.7, 
+                                    picker=True, vmin=0, vmax=max(1, len(self.all_events)))
             
             if 'x_1' in df_slice.columns:
                 d1 = df_slice.dropna(subset=['x_1', 'y_1'])
                 if not d1.empty:
+                    # Added picker=True to make dots clickable
                     self.ax.scatter(d1['x_1'], d1['y_1'], c=d1['timestamp_order'], 
-                                    cmap=g_map, s=100, marker="D", edgecolors='white', alpha=0.7)
-
+                                    cmap=g_map, s=100, marker="D", edgecolors='white', alpha=0.7, 
+                                    picker=True, vmin=0, vmax=max(1, len(self.all_events)))
         # Apply User-Defined Limits
         try:
-            self.ax.set_xlim(0, float(self.x_limit_var.get()))
-            self.ax.set_ylim(0, float(self.y_limit_var.get()))
+            x_max = float(self.x_limit_var.get())
+            y_max = float(self.y_limit_var.get())
+            self.ax.set_xlim(0, x_max)
+            self.ax.set_ylim(0, y_max)
+            
+            # Add more tick marks (10 divisions for X, 5 for Y)
+            self.ax.set_xticks(np.linspace(0, x_max, 11))
+            self.ax.set_yticks(np.linspace(0, y_max, 6))
+            self.ax.grid(True, which='both', linestyle='--', alpha=0.5)
         except:
             pass
 
+        if self.selected_point_idx is not None:
+            # We use the index to pull the EXACT data row
+            # This ensures we aren't just guessing based on proximity
+            try:
+                row = self.all_events[self.selected_point_idx]
+                
+                # Highlight Pointer 0 (Always exists in a valid event)
+                if 'x_0' in row:
+                    self.ax.scatter(row['x_0'], row['y_0'], s=350, 
+                                    facecolors='none', edgecolors="#d8b4fe", 
+                                    linewidths=3, zorder=10)
+                    self.ax.scatter(row['x_0'], row['y_0'], s=50, 
+                                    color='white', edgecolors='black', zorder=11)
+
+                # Highlight Pointer 1 ONLY if it exists at this EXACT timestamp
+                if 'x_1' in row and not pd.isna(row['x_1']):
+                    self.ax.scatter(row['x_1'], row['y_1'], s=350, marker="D",
+                                    facecolors='none', edgecolors="#4ade80", 
+                                    linewidths=3, zorder=10)
+                    self.ax.scatter(row['x_1'], row['y_1'], s=50, marker="D",
+                                    color='white', edgecolors='black', zorder=11)
+            except IndexError:
+                pass                            
         # Use draw_idle() for smoother real-time performance
         self.canvas_widget.draw_idle()
 
@@ -320,6 +362,51 @@ class MotionVisualizer:
             ts = time.strftime("%Y%m%d-%H%M%S", time.localtime(first_ts))
         
         return f"TouchLog_{ts}.{extension}"
+
+    def copy_to_clipboard(self):
+        import io
+        import time
+        from PIL import Image
+        import win32clipboard
+        import win32con # Add this import for constant definitions
+
+        try:
+            # 1. Image Processing
+            buf = io.BytesIO()
+            self.fig.savefig(buf, format='png', dpi=150)
+            buf.seek(0)
+            img = Image.open(buf)
+            
+            output = io.BytesIO()
+            img.convert("RGB").save(output, "BMP")
+            data = output.getvalue()[14:]
+            output.close()
+
+            # 2. Robust Clipboard Access
+            max_retries = 10
+            success = False
+            
+            for i in range(max_retries):
+                try:
+                    # Try to open
+                    win32clipboard.OpenClipboard(self.root.winfo_id()) # Link to our window
+                    win32clipboard.EmptyClipboard()
+                    win32clipboard.SetClipboardData(win32con.CF_DIB, data)
+                    win32clipboard.CloseClipboard()
+                    success = True
+                    break
+                except Exception as e:
+                    # If denied, wait slightly longer each time (backoff)
+                    time.sleep(0.05 * (i + 1)) 
+            
+            if success:
+                self.action_label.config(text="● COPIED TO CLIPBOARD", fg="#4caf50")
+                self.root.after(2000, lambda: self.action_label.config(text="● READY", fg="#4285f4"))
+            else:
+                messagebox.showwarning("Clipboard Busy", "Windows Clipboard History is currently busy. Please try again.")
+
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to copy: {e}")
 
     def save_plot(self):
         default_name = self.get_timestamp_filename("png")
@@ -344,6 +431,107 @@ class MotionVisualizer:
         if path: 
             pd.DataFrame(self.all_events).to_csv(path, index=False)
             messagebox.showinfo("Success", f"Exported to {os.path.basename(path)}")
+
+    def on_pick(self, event):
+        ind = event.ind[0]
+        limit = int(self.slider_var.get())
+        df = pd.DataFrame(self.all_events).iloc[:limit + 1]
+        self.selected_point_idx = df.iloc[ind]['timestamp_order']
+        
+        self.sync_terminal_to_selection()
+        self.update_plot()
+
+        self.pick_lock = True 
+        self.root.after(100, self.reset_pick_lock)
+
+    def reset_pick_lock(self):
+        self.pick_lock = False
+
+    def on_scroll(self, event):
+        """Scrolls through events chronologically. If none selected, snaps to closest."""
+        if event.inaxes != self.ax or not self.all_events:
+            return
+
+        # 1. If nothing is selected, find the closest point to the mouse to begin
+        if self.selected_point_idx is None:
+            limit = int(self.slider_var.get())
+            df = pd.DataFrame(self.all_events).iloc[:limit + 1]
+            
+            distances = []
+            for i, row in df.iterrows():
+                d0 = np.sqrt((row['x_0'] - event.xdata)**2 + (row['y_0'] - event.ydata)**2)
+                distances.append((d0, row['timestamp_order']))
+                if 'x_1' in row and not pd.isna(row['x_1']):
+                    d1 = np.sqrt((row['x_1'] - event.xdata)**2 + (row['y_1'] - event.ydata)**2)
+                    distances.append((d1, row['timestamp_order']))
+            
+            distances.sort()
+            self.selected_point_idx = distances[0][1] # Grab the timestamp_order of the closest
+        
+        else:
+            # 2. If a point IS selected, scroll based on Time (timestamp_order)
+            # Scroll Up = Previous Event (-1), Scroll Down = Next Event (+1)
+            direction = -1 if event.button == 'up' else 1
+            new_idx = self.selected_point_idx + direction
+            
+            # Constraints: Don't scroll past 0 or the current slider limit
+            limit = int(self.slider_var.get())
+            if 0 <= new_idx <= limit:
+                self.selected_point_idx = new_idx
+
+        # 3. Update Terminal and Graph
+        self.sync_terminal_to_selection()
+        self.update_plot()
+        
+    def sync_terminal_to_selection(self):
+        """Finds the selected point's data and highlights it in the terminal."""
+        if self.selected_point_idx is None: return
+        
+        df = pd.DataFrame(self.all_events)
+        clicked_row = df[df['timestamp_order'] == self.selected_point_idx].iloc[0]
+        
+        is_p1 = 'x_1' in clicked_row and not pd.isna(clicked_row['x_1'])
+        event_id = clicked_row.get('eventId', None)
+        
+        if event_id:
+            search_str = f"eventId={event_id}"
+            self.terminal.tag_remove("highlight_p0", "1.0", tk.END)
+            self.terminal.tag_remove("highlight_p1", "1.0", tk.END)
+            
+            pos = self.terminal.search(search_str, "1.0", stopindex=tk.END)
+            if pos:
+                line_start = f"{pos.split('.')[0]}.0"
+                line_end = f"{pos.split('.')[0]}.end"
+                tag = "highlight_p1" if is_p1 else "highlight_p0"
+                color = "#4ade80" if is_p1 else "#d8b4fe"
+                
+                self.terminal.tag_add(tag, line_start, line_end)
+                self.terminal.tag_config(tag, background=color, foreground="#000000")
+                self.terminal.see(line_start)
+
+    def on_canvas_click(self, event):
+        """Clears selection if clicking on the empty background of the plot."""
+
+        if getattr(self, 'pick_lock', False):
+            return
+        
+        # 1. Ignore if we clicked outside the axes (like on the labels or buttons)
+        if event.inaxes != self.ax:
+            return
+            
+        # 2. Matplotlib sets event.canvas.widgetlock when a 'pick' happens.
+        # If the mouse isn't over a specific dot, we clear the selection.
+        # We also check if it's a left-click (button 1)
+        if event.button == 1:
+            # We add a tiny delay or check to ensure on_pick didn't just fire
+            # If the user clicks empty space, reset everything
+            self.selected_point_idx = None
+            
+            # Remove terminal highlights
+            self.terminal.tag_remove("highlight_p0", "1.0", tk.END)
+            self.terminal.tag_remove("highlight_p1", "1.0", tk.END)
+            
+            self.update_plot()
 
 if __name__ == "__main__":
     root = tk.Tk(); MotionVisualizer(root); root.mainloop()

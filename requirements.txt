@@ -1,4 +1,6 @@
-matplotlib
-seaborn
-pandas
-numpy
+matplotlib>=3.7.1
+pandas>=2.0.0
+numpy>=1.24.0
+seaborn>=0.12.0
+Pillow>=10.0.0
+pywin32>=306
