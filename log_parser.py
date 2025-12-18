@@ -2,15 +2,18 @@ import sys
 import re
 import threading
 import queue
+import time
+import os
 import tkinter as tk
 from tkinter import scrolledtext, messagebox, filedialog, ttk
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+from matplotlib.colors import ListedColormap
 import seaborn as sns
 import pandas as pd
 import numpy as np
 
-# --- SMOOTH ROUNDED BUTTON COMPONENT ---
+# --- MODERN BUTTON COMPONENT (RE-USED) ---
 class ModernButton(tk.Canvas):
     def __init__(self, parent, text, color="#1a73e8", command=None, width=150, height=50):
         super().__init__(parent, width=width+10, height=height+10, bg=parent['bg'], highlightthickness=0)
@@ -39,16 +42,18 @@ class ModernButton(tk.Canvas):
         new_rgb = [min(255, int(c * factor)) for c in rgb]
         return "#%02x%02x%02x" % tuple(new_rgb)
 
-# --- MAIN APPLICATION ---
 class MotionVisualizer:
     def __init__(self, root):
         self.root = root
-        self.root.title("Nexus Touch Analytics")
-        self.root.geometry("1100x950")
+        self.root.title("Nexus Playable Analytics | Real-Time Replay")
+        self.root.geometry("1100x1000")
         self.root.configure(bg="#f1f3f4")
         
         self.all_events = []
         self.line_queue = queue.Queue()
+        self.log_file = "live_data.txt"
+        self.is_live = True  # The 'Global' Follow Variable
+        self.is_playing = False
 
         # 1. TOP BAR
         self.top_frame = tk.Frame(root, bg="#f1f3f4", padx=20, pady=20)
@@ -64,64 +69,162 @@ class MotionVisualizer:
         
         tk.Label(input_box, text="X MAX", font=("Segoe UI", 12, "bold"), bg="#f1f3f4", fg="#5f6368").grid(row=0, column=0)
         ttk.Entry(input_box, textvariable=self.x_limit_var, width=8, font=("Segoe UI", 14)).grid(row=0, column=1, padx=10)
-        
         tk.Label(input_box, text="Y MAX", font=("Segoe UI", 12, "bold"), bg="#f1f3f4", fg="#5f6368").grid(row=0, column=2, padx=(10, 0))
         ttk.Entry(input_box, textvariable=self.y_limit_var, width=8, font=("Segoe UI", 14)).grid(row=0, column=3, padx=10)
        
         self.action_label = tk.Label(self.top_frame, text="● READY", font=("Segoe UI", 14, "bold"), fg="#4285f4", bg="#f1f3f4")
         self.action_label.pack(side=tk.LEFT, padx=30)
 
-        self.btn_clear = ModernButton(self.top_frame, text="🗑️ CLEAR", color="#ffa3a3", command=self.clear_data)
-        self.btn_clear.pack(side=tk.RIGHT, padx=5)
-        self.btn_csv = ModernButton(self.top_frame, text="📁 EXPORT CSV", color="#f4ff91", command=self.export_csv)
-        self.btn_csv.pack(side=tk.RIGHT, padx=5)
-        self.btn_save = ModernButton(self.top_frame, text="📷 SAVE PNG", color="#91faff", command=self.save_plot)
-        self.btn_save.pack(side=tk.RIGHT, padx=5)
+        ModernButton(self.top_frame, text="🗑️ CLEAR", color="#ffa3a3", command=self.clear_data).pack(side=tk.RIGHT, padx=5)
+        ModernButton(self.top_frame, text="📁 EXPORT CSV", color="#f4ff91", command=self.export_csv).pack(side=tk.RIGHT, padx=5)
+        ModernButton(self.top_frame, text="📷 SAVE PNG", color="#91faff", command=self.save_plot).pack(side=tk.RIGHT, padx=5)
 
+        # 2. PANED WINDOW
         self.paned_window = tk.PanedWindow(root, orient=tk.VERTICAL, bg="#f1f3f4", sashwidth=6, sashrelief=tk.FLAT)
         self.paned_window.pack(fill=tk.BOTH, expand=True, padx=20, pady=5)
 
-        # 2. PLOT PANE
         self.card_frame = tk.Frame(self.paned_window, bg="#f1f3f4")
-        self.card_canvas = tk.Canvas(self.card_frame, bg="#f1f3f4", highlightthickness=0)
-        self.card_canvas.pack(fill=tk.BOTH, expand=True)
+        self.fig, self.ax = plt.subplots(figsize=(8, 5))
+        self.canvas_widget = FigureCanvasTkAgg(self.fig, master=self.card_frame)
+        self.canvas_widget.get_tk_widget().pack(fill=tk.BOTH, expand=True)
+        self.paned_window.add(self.card_frame, minsize=400)
 
-        sns.set_theme(style="whitegrid")
-        self.fig, self.ax = plt.subplots(figsize=(8, 6))
-        self.fig.patch.set_facecolor('white')
-        self.canvas_widget = FigureCanvasTkAgg(self.fig, master=self.card_canvas)
-        self.plot_item = self.card_canvas.create_window(0, 0, window=self.canvas_widget.get_tk_widget(), anchor="nw")
-        self.paned_window.add(self.card_frame, minsize=300)
+        # 3. MODERN PLAYBACK CONTROLS
+        self.playback_frame = tk.Frame(root, bg="#ffffff", padx=20, pady=15, highlightthickness=1, highlightbackground="#e0e0e0")
+        self.playback_frame.pack(fill=tk.X, padx=20, pady=10)
 
-        # 3. TERMINAL PANE
-        self.term_container = tk.Frame(self.paned_window, bg="#f1f3f4")
-        self.terminal = scrolledtext.ScrolledText(self.term_container, bg="white", fg="#3c4043", font=("Consolas", 10), relief=tk.FLAT, borderwidth=1, highlightthickness=1, highlightbackground="#e0e0e0")
-        self.terminal.pack(fill=tk.BOTH, expand=True, padx=20, pady=(0, 20))
+        self.play_btn = tk.Button(self.playback_frame, text="▶ PLAY", font=("Segoe UI", 10, "bold"), 
+                                 command=self.toggle_play, width=12, bg="#1a73e8", fg="white", 
+                                 activebackground="#1557b0", relief=tk.FLAT)
+        self.play_btn.pack(side=tk.LEFT, padx=5)
 
-        # --- RAINBOW COLORS SETUP ---
-        self.rainbow_colors = ["#e91e63", "#9c27b0", "#673ab7", "#3f51b5", "#2196f3", "#009688", "#4caf50", "#ff9800", "#795548"]
-        for i, color in enumerate(self.rainbow_colors):
-            self.terminal.tag_config(f"color_{i}", foreground=color)
+        self.slider_var = tk.DoubleVar(value=0)
+
+        # Custom styled scale
+        self.slider = ttk.Scale(self.playback_frame, from_=0, to=100, orient=tk.HORIZONTAL, 
+                               variable=self.slider_var, command=self.on_slider_move)
+        self.slider.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=15)
         
-        self.terminal.tag_config("timestamp", foreground="#757575")
-        self.terminal.tag_config("action", foreground="#d32f2f", font=("Consolas", 10, "bold"))
+        self.counter_label = tk.Label(self.playback_frame, text="0 / 0", font=("Consolas", 11, "bold"), bg="#ffffff", fg="#1a73e8")
+        self.counter_label.pack(side=tk.RIGHT, padx=10)
 
-        self.paned_window.add(self.term_container, minsize=100)
-        self.card_canvas.bind("<Configure>", self.on_resize)
+        # 4. TERMINAL PANE
+        self.term_container = tk.Frame(self.paned_window, bg="#f1f3f4")
+        tk.Label(self.term_container, text="LIVE LOG STREAM", font=("Segoe UI", 10, "bold"), bg="#f1f3f4", fg="#5f6368").pack(anchor=tk.W, padx=20)
+        self.terminal = scrolledtext.ScrolledText(self.term_container, bg="white", font=("Consolas", 10), height=8)
+        self.terminal.pack(fill=tk.BOTH, expand=True, padx=20, pady=(0, 10))
+        self.paned_window.add(self.term_container, minsize=150)
 
-        threading.Thread(target=self.read_stdin, daemon=True).start()
+        # Define terminal colors
+        self.terminal.tag_config("x0", foreground="#A020F0", font=("Consolas", 10, "bold")) # Bright Purple
+        self.terminal.tag_config("x1", foreground="#55d368", font=("Consolas", 10, "bold")) # Neon Green
+        self.terminal.tag_config("action", foreground="#0000FF", font=("Consolas", 10, "bold")) # Deep Blue
+
+        # THREADING
+        threading.Thread(target=self.read_data, daemon=True).start()
         self.process_queue()
 
-    def on_resize(self, event):
-        w, h = event.width, event.height
-        self.card_canvas.delete("card_bg")
-        r = 40
-        x1, y1, x2, y2 = 5, 5, w-5, h-5
-        points = [x1+r, y1, x1+r, y1, x2-r, y1, x2-r, y1, x2, y1, x2, y1+r, x2, y1+r, x2, y2-r, x2, y2-r, x2, y2, x2-r, y2, x2-r, y2, x1+r, y2, x1+r, y2, x1, y2, x1, y2-r, x1, y2-r, x1, y1+r, x1, y1+r, x1, y1]
-        self.card_canvas.create_polygon(points, fill="white", outline="#e0e0e0", smooth=True, tag="card_bg")
-        self.card_canvas.tag_lower("card_bg")
-        self.card_canvas.coords(self.plot_item, w/2, h/2)
-        self.card_canvas.itemconfig(self.plot_item, width=w-60, height=h-60, anchor="center")
+    def toggle_play(self):
+        self.is_playing = not self.is_playing
+        self.play_btn.config(text="⏸ PAUSE" if self.is_playing else "▶ PLAY", 
+                            bg="#ea4335" if self.is_playing else "#1a73e8")
+        if self.is_playing:
+            if self.slider_var.get() >= len(self.all_events) - 1:
+                self.slider_var.set(0)
+            self.run_realtime_autoplay()
+
+    def run_realtime_autoplay(self):
+        """Calculates the time difference between events to play back at true speed."""
+        if not self.is_playing:
+            return
+
+        curr_idx = int(self.slider_var.get())
+        if curr_idx < len(self.all_events) - 1:
+            # Determine how long to wait before the next point
+            t1 = self.all_events[curr_idx]['pc_time']
+            t2 = self.all_events[curr_idx + 1]['pc_time']
+            # Convert to ms, capped at 1.5s to avoid boring long pauses
+            wait_ms = int(min((t2 - t1) * 1000, 1500))
+            
+            self.slider_var.set(curr_idx + 1)
+            self.update_plot()
+            self.root.after(wait_ms, self.run_realtime_autoplay)
+        else:
+            self.is_playing = False
+            self.play_btn.config(text="▶ PLAY", bg="#1a73e8")
+
+    def on_slider_move(self, event):
+        total = len(self.all_events)
+        current_selection = int(float(event)) # Scale widget sends a string/float
+        
+        # If the user drags the slider away from the end, stop following live
+        if current_selection < total - 5:
+            self.is_live = False
+            self.action_label.config(text="● INSPECTING HISTORY", fg="#f4b400")
+        else:
+            self.is_live = True
+            self.action_label.config(text="● LIVE", fg="#4caf50")
+            
+        self.update_plot()
+    
+    def read_data(self):
+        # Support for both file redirection and standard piping
+        if not sys.stdin.isatty():
+            while True:
+                line = sys.stdin.readline()
+                if line: self.line_queue.put(line)
+        else:
+            if not os.path.exists(self.log_file): open(self.log_file, "w").close()
+            with open(self.log_file, "r") as f:
+                f.seek(0, 2)
+                while True:
+                    line = f.readline()
+                    if line: self.line_queue.put(line)
+                    else: time.sleep(0.01)
+
+    def process_queue(self):
+        new_points = False
+        while not self.line_queue.empty():
+            try:
+                line = self.line_queue.get_nowait()
+                
+                # 'end-1c' is the standard way to get the exact start of the new insertion
+                start_ptr = self.terminal.index("end-1c")
+                self.terminal.insert(tk.END, line)
+                
+                # --- BRIGHT SYNTAX HIGHLIGHTING ---
+                
+                # 1. Action (Blue) - matches action=ACTION_MOVE
+                act = re.search(r'action=[^, ]+', line)
+                if act:
+                    self.terminal.tag_add("action", f"{start_ptr} + {act.start()}c", f"{start_ptr} + {act.end()}c")
+                
+                # 2. Pointer 0 (Purple) - matches x[0]=... and y[0]=...
+                for m in re.finditer(r'[xy]\[0\]=[^, ]+', line):
+                    self.terminal.tag_add("x0", f"{start_ptr} + {m.start()}c", f"{start_ptr} + {m.end()}c")
+
+                # 3. Pointer 1 (Green) - matches x[1]=... and y[1]=...
+                for m in re.finditer(r'[xy]\[1\]=[^, ]+', line):
+                    self.terminal.tag_add("x1", f"{start_ptr} + {m.start()}c", f"{start_ptr} + {m.end()}c")
+                # 4. Parse for graph
+                data = self.parse_line(line)
+                if data:
+                    self.all_events.append(data)
+                    new_points = True
+                    
+            except queue.Empty:
+                break
+
+        if new_points:
+            total = len(self.all_events)
+            self.slider.config(to=max(0, total - 1))
+            if self.is_live and not self.is_playing:
+                self.slider_var.set(total - 1)
+                self.update_plot()
+            self.counter_label.config(text=f"{int(self.slider_var.get())} / {total-1}")
+            self.terminal.see(tk.END)
+
+        self.root.after(20, self.process_queue)
 
     def parse_line(self, line):
         match = re.search(r'MotionEvent \{ (.*) \}', line)
@@ -129,73 +232,95 @@ class MotionVisualizer:
         kv = re.findall(r'(\w+)(?:\[(\d+)\])?=([^, ]+)', match.group(1))
         row = { (f"{k}_{i}" if i else k): (float(v) if '.' in v else int(v) if v.isdigit() else v) for k, i, v in kv }
         row['timestamp_order'] = len(self.all_events)
+        row['pc_time'] = time.time() # Capture PC arrival time for playback deltas
         return row
 
     def update_plot(self):
-        if not self.all_events:
-            self.ax.clear(); self.canvas_widget.draw(); return
-        df = pd.DataFrame(self.all_events)
         self.ax.clear()
-        if 'x_0' in df.columns and 'y_0' in df.columns:
-            df0 = df.dropna(subset=['x_0', 'y_0'])
-            self.ax.scatter(df0['x_0'], df0['y_0'], c=df0['timestamp_order'], cmap='Purples', s=120, edgecolors='white', alpha=0.7)
-        if 'x_1' in df.columns and 'y_1' in df.columns:
-            df1 = df.dropna(subset=['x_1', 'y_1'])
-            if not df1.empty:
-                self.ax.scatter(df1['x_1'], df1['y_1'], c=df1['timestamp_order'], cmap='viridis', s=100, edgecolors='white', marker="D", alpha=0.7)
+        
+        # 1. IMMEDIATE RESTORATION OF AXES (Prevents disappearing)
+        self.ax.set_xlabel("X-Axis (Sensor Range)", fontweight='bold', color='#5f6368')
+        self.ax.set_ylabel("Y-Axis (Sensor Range)", fontweight='bold', color='#5f6368')
+        self.ax.set_title("Live Replay: Multi-Touch Analytics", fontweight='bold', pad=10)
+        
+        if self.all_events:
+            # Get the current point from the slider
+            limit = int(self.slider_var.get())
+            
+            # Create the DataFrame
+            df = pd.DataFrame(self.all_events)
+            
+            # SLICING FIX: Ensure we are looking at the data up to the limit
+            # We use .iloc to ensure we get the correct integer index range
+            df_slice = df.iloc[:limit + 1] 
+
+            # Create colormaps
+            p_map = ListedColormap(sns.color_palette("Purples", as_cmap=True)(np.linspace(0.3, 0.9, 256)))
+            g_map = ListedColormap(sns.color_palette("Greens", as_cmap=True)(np.linspace(0.3, 0.9, 256)))
+            
+            if 'x_0' in df_slice.columns:
+                d0 = df_slice.dropna(subset=['x_0', 'y_0'])
+                # Only plot if we have data
+                if not d0.empty:
+                    self.ax.scatter(d0['x_0'], d0['y_0'], c=d0['timestamp_order'], 
+                                    cmap=p_map, s=120, edgecolors='white', alpha=0.7)
+            
+            if 'x_1' in df_slice.columns:
+                d1 = df_slice.dropna(subset=['x_1', 'y_1'])
+                if not d1.empty:
+                    self.ax.scatter(d1['x_1'], d1['y_1'], c=d1['timestamp_order'], 
+                                    cmap=g_map, s=100, marker="D", edgecolors='white', alpha=0.7)
+
+        # Apply User-Defined Limits
         try:
             self.ax.set_xlim(0, float(self.x_limit_var.get()))
             self.ax.set_ylim(0, float(self.y_limit_var.get()))
-        except: pass
-        self.ax.set_xlabel("X"); self.ax.set_ylabel("Y")
-        self.canvas_widget.draw()
+        except:
+            pass
+
+        # Use draw_idle() for smoother real-time performance
+        self.canvas_widget.draw_idle()
+
 
     def clear_data(self):
-        self.all_events = []; self.terminal.delete('1.0', tk.END); self.update_plot()
+        self.all_events = []; self.terminal.delete('1.0', tk.END); self.slider_var.set(0); self.update_plot()
+        if os.path.exists(self.log_file): open(self.log_file, "w").close()
+
+    def get_timestamp_filename(self, extension):
+        """Generates a filename based on the first data point's timestamp."""
+        if not self.all_events:
+            # Fallback to current time if no data exists
+            ts = time.strftime("%Y%m%d-%H%M%S")
+        else:
+            # Use the 'pc_time' from the very first event (index 0)
+            first_ts = self.all_events[0]['pc_time']
+            ts = time.strftime("%Y%m%d-%H%M%S", time.localtime(first_ts))
+        
+        return f"TouchLog_{ts}.{extension}"
 
     def save_plot(self):
-        path = filedialog.asksaveasfilename(defaultextension=".png"); 
-        if path: self.fig.savefig(path, dpi=300); messagebox.showinfo("Success", "Saved")
+        default_name = self.get_timestamp_filename("png")
+        path = filedialog.asksaveasfilename(
+            defaultextension=".png",
+            initialfile=default_name,
+            title="Save PNG Plot"
+        )
+        if path: 
+            self.fig.savefig(path, dpi=300)
+            messagebox.showinfo("Success", f"Saved to {os.path.basename(path)}")
 
     def export_csv(self):
-        if not self.all_events: return
-        path = filedialog.asksaveasfilename(defaultextension=".csv")
-        if path: pd.DataFrame(self.all_events).to_csv(path, index=False)
-
-    def read_stdin(self):
-        for line in sys.stdin:
-            if line: self.line_queue.put(line)
-
-    def process_queue(self):
-        try:
-            while True:
-                line = self.line_queue.get_nowait()
-                start_ptr = self.terminal.index("end-1c")
-                self.terminal.insert("end", line)
-                
-                # 1. Colorize Timestamp (First 18 chars)
-                self.terminal.tag_add("timestamp", start_ptr, f"{start_ptr} + 18c")
-
-                # 2. Colorize Action
-                act = re.search(r'action=([^, ]*)', line)
-                if act:
-                    self.terminal.tag_add("action", f"{start_ptr} + {act.start()}c", f"{start_ptr} + {act.end()}c")
-
-                # 3. Rainbow Colorize Key-Value Pairs inside { }
-                # We find all matches for "key=value" and rotate through the rainbow palette
-                kv_matches = list(re.finditer(r'(\w+(?:\[\d+\])?)=([^, \}]+)', line))
-                for i, m in enumerate(kv_matches):
-                    color_tag = f"color_{i % len(self.rainbow_colors)}"
-                    self.terminal.tag_add(color_tag, f"{start_ptr} + {m.start()}c", f"{start_ptr} + {m.end()}c")
-
-                self.terminal.see("end")
-                data = self.parse_line(line)
-                if data:
-                    self.all_events.append(data)
-                    self.action_label.config(text=f"● {data.get('action', 'N/A')}")
-                    self.update_plot()
-        except queue.Empty: pass
-        self.root.after(50, self.process_queue)
+        if not self.all_events:
+            return
+        default_name = self.get_timestamp_filename("csv")
+        path = filedialog.asksaveasfilename(
+            defaultextension=".csv",
+            initialfile=default_name,
+            title="Export CSV Data"
+        )
+        if path: 
+            pd.DataFrame(self.all_events).to_csv(path, index=False)
+            messagebox.showinfo("Success", f"Exported to {os.path.basename(path)}")
 
 if __name__ == "__main__":
     root = tk.Tk(); MotionVisualizer(root); root.mainloop()
