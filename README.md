@@ -22,7 +22,7 @@ cd touch-sensor-visualization
 2. **Install Dependencies:**
 Use the provided requirements file to install all necessary libraries (`matplotlib`, `seaborn`, `pandas`, and `numpy`).
 ```bash
-pip install -r requirements.txt
+py -m pip install -r requirements.txt
 ```
 
 ## 🚀 Usage (Two-Terminal Workflow)
@@ -32,7 +32,7 @@ For the best real-time experience on Windows, run data collection and visualizat
 ### Terminal 1: Data Collection
 Connect your device and stream sensor logs to a local file:
 ```bash
-adb logcat -c && adb logcat -v brief -s MicroXRInputService:* > live_data.txt
+adb logcat -s MicroXrInputService:* > live_data.txt
 ```
 
 ### Terminal 2: Visualization
