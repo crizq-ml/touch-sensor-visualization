@@ -13,7 +13,7 @@ A high-performance, real-time visualization suite for Android MotionEvents. This
 
 1. **Install Dependencies:**
    ```bash
-   git clone [https://github.com/yourusername/touch-sensor-visualization.git](https://github.com/yourusername/touch-sensor-visualization.git)
+   git clone [https://github.com/crizq-ml/touch-sensor-visualization.git](https://github.com/crizq-ml/touch-sensor-visualization.git)
    cd touch-sensor-visualization
    ```
 2. **Clone the repository:**
@@ -33,7 +33,7 @@ cat input_log.txt | python log_parser.py
 ### 2. Real-Time Visualization (ADB)
 To run live using a connected Android device.
 
-> [!CRITICAL]
+> [!IMPORTANT]
 > We use the -u flag to force Python into unbuffered mode. Without this, the GUI may hang or data may appear in delayed "bursts" due to ADB's internal piping buffers.
 
 ```bash
