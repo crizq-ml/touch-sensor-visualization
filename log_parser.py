@@ -9,6 +9,8 @@ from tkinter import scrolledtext, messagebox, filedialog, ttk
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from matplotlib.colors import ListedColormap
+from matplotlib.lines import Line2D as Line2D # For creating legend proxies
+from matplotlib.patches import Patch
 import seaborn as sns
 import pandas as pd
 import numpy as np
@@ -109,7 +111,7 @@ class MotionVisualizer:
         self.playback_frame = tk.Frame(root, bg="#ffffff", padx=20, pady=15, highlightthickness=1, highlightbackground="#e0e0e0")
         self.playback_frame.pack(fill=tk.X, padx=20, pady=10)
 
-        self.play_btn = ModernButton(self.playback_frame, text="▶ PLAY", color="#91faff", 
+        self.play_btn = ModernButton(self.playback_frame, text="🐈 PLAY", color="#91faff", 
                                     command=self.toggle_play, width=120, height=40)
         self.play_btn.pack(side=tk.LEFT, padx=5)
         self.slider_var = tk.DoubleVar(value=0)
@@ -125,7 +127,7 @@ class MotionVisualizer:
         # 4. TERMINAL PANE
         self.term_container = tk.Frame(self.paned_window, bg="#f1f3f4")
         tk.Label(self.term_container, text="LIVE LOG STREAM", font=("Segoe UI", 10, "bold"), bg="#f1f3f4", fg="#5f6368").pack(anchor=tk.W, padx=20)
-        self.terminal = scrolledtext.ScrolledText(self.term_container, bg="white", font=("Consolas", 10), height=8)
+        self.terminal = scrolledtext.ScrolledText(self.term_container, bg="white", font=("Consolas", 10), height=8, selectbackground="#d0e2ff", selectforeground="#000000")
         self.terminal.pack(fill=tk.BOTH, expand=True, padx=20, pady=(0, 10))
         self.paned_window.add(self.term_container, minsize=150)
 
@@ -271,82 +273,157 @@ class MotionVisualizer:
     def update_plot(self):
         self.ax.clear()
         
-        # 1. IMMEDIATE RESTORATION OF AXES (Prevents disappearing)
+        # 1. Restore Axes and Labels
         self.ax.set_xlabel("X-Axis (Sensor Range)", fontweight='bold', color='#5f6368')
         self.ax.set_ylabel("Y-Axis (Sensor Range)", fontweight='bold', color='#5f6368')
         self.ax.set_title("Live Replay: Multi-Touch Analytics", fontweight='bold', pad=10)
         
         if self.all_events:
-            # Get the current point from the slider
             limit = int(self.slider_var.get())
-            
-            # Create the DataFrame
             df = pd.DataFrame(self.all_events)
-            
-            # SLICING FIX: Ensure we are looking at the data up to the limit
-            # We use .iloc to ensure we get the correct integer index range
             df_slice = df.iloc[:limit + 1] 
+            max_v = max(1, len(self.all_events))
 
-            # Create colormaps
-            p_map = ListedColormap(sns.color_palette("Purples", as_cmap=True)(np.linspace(0.3, 0.9, 256)))
-            g_map = ListedColormap(sns.color_palette("Greens", as_cmap=True)(np.linspace(0.3, 0.9, 256)))
-            
-            if 'x_0' in df_slice.columns:
-                d0 = df_slice.dropna(subset=['x_0', 'y_0'])
-                if not d0.empty:
-                    # Added picker=True to make dots clickable
-                    self.ax.scatter(d0['x_0'], d0['y_0'], c=d0['timestamp_order'], 
-                                    cmap=p_map, s=120, edgecolors='white', alpha=0.7, 
-                                    picker=True, vmin=0, vmax=max(1, len(self.all_events)))
-            
-            if 'x_1' in df_slice.columns:
-                d1 = df_slice.dropna(subset=['x_1', 'y_1'])
-                if not d1.empty:
-                    # Added picker=True to make dots clickable
-                    self.ax.scatter(d1['x_1'], d1['y_1'], c=d1['timestamp_order'], 
-                                    cmap=g_map, s=100, marker="D", edgecolors='white', alpha=0.7, 
-                                    picker=True, vmin=0, vmax=max(1, len(self.all_events)))
-        # Apply User-Defined Limits
+            # Color map base codes
+            p_neon = "#b651fa" # Purple
+            g_neon = "#25ff80" # Green
+
+            # Create colormaps that stay saturated even when "faded"
+            p_map = ListedColormap(sns.light_palette(p_neon, n_colors=256)[50:])
+            g_map = ListedColormap(sns.light_palette(g_neon, n_colors=256)[50:])       
+
+            # --- DRAW DATA POINTS ---
+            for p_idx in [0, 1]:
+                x_key, y_key = f'x_{p_idx}', f'y_{p_idx}'
+                cmap = p_map if p_idx == 0 else g_map
+                
+                if x_key in df_slice.columns:
+                    data = df_slice.dropna(subset=[x_key, y_key])
+                    if not data.empty:
+                        # A. ACTION_DOWN / POINTER_DOWN (Large Circle)
+                        down = data[data['action'].str.contains('DOWN', case=False, na=False)]
+                        self.ax.scatter(down[x_key], down[y_key], c=down['timestamp_order'], 
+                                        cmap=cmap, s=500, marker="o", edgecolors='white', 
+                                        alpha=0.9, picker=2, zorder=5, vmin=0, vmax=max_v,
+                                        gid=down.index.tolist())
+
+                        # B. ACTION_UP / POINTER_UP (Large X) - Highest Data Priority
+                        up = data[data['action'].str.contains('UP', case=False, na=False)]
+                        self.ax.scatter(up[x_key], up[y_key], c=up['timestamp_order'], 
+                                        cmap=cmap, s=350, marker="x", linewidths=4, 
+                                        alpha=1.0, picker=2, zorder=6, vmin=0, vmax=max_v,
+                                        gid=up.index.tolist())
+
+                        # C. ACTION_MOVE (Standard Dots/Diamonds) - Background Priority
+                        move = data[~data['action'].str.contains('UP|DOWN', case=False, na=False)]
+                        marker_m = "o" if p_idx == 0 else "D"
+                        self.ax.scatter(move[x_key], move[y_key], c=move['timestamp_order'], 
+                                        cmap=cmap, s=120 if p_idx==0 else 100, marker=marker_m, 
+                                        edgecolors='white', alpha=0.7, picker=2, zorder=2, vmin=0, vmax=max_v,
+                                        gid=move.index.tolist())
+
+        # Apply Graph Limits
         try:
             x_max = float(self.x_limit_var.get())
             y_max = float(self.y_limit_var.get())
             self.ax.set_xlim(0, x_max)
             self.ax.set_ylim(0, y_max)
-            
-            # Add more tick marks (10 divisions for X, 5 for Y)
             self.ax.set_xticks(np.linspace(0, x_max, 11))
             self.ax.set_yticks(np.linspace(0, y_max, 6))
-            self.ax.grid(True, which='both', linestyle='--', alpha=0.5)
+            self.ax.grid(True, which='both', linestyle='--', alpha=0.3)
         except:
             pass
 
+        # --- SMART SELECTION HIGHLIGHT ---
         if self.selected_point_idx is not None:
-            # We use the index to pull the EXACT data row
-            # This ensures we aren't just guessing based on proximity
             try:
                 row = self.all_events[self.selected_point_idx]
-                
-                # Highlight Pointer 0 (Always exists in a valid event)
-                if 'x_0' in row:
-                    self.ax.scatter(row['x_0'], row['y_0'], s=350, 
-                                    facecolors='none', edgecolors="#d8b4fe", 
-                                    linewidths=3, zorder=10)
-                    self.ax.scatter(row['x_0'], row['y_0'], s=50, 
-                                    color='white', edgecolors='black', zorder=11)
+                action = str(row.get('action', '')).upper()
+                is_up = "UP" in action
+                is_down = "DOWN" in action
 
-                # Highlight Pointer 1 ONLY if it exists at this EXACT timestamp
+                # Determine Highlight Size and Shape
+                s_size = 800 if is_down else (500 if is_up else 450)
+                
+                # --- Highlight P0 (Purple) ---
+                if 'x_0' in row:
+                    h_p0 = "x" if (is_up and ("ACTION_UP" in action or "(0)" in action)) else "o"
+                    color_p0 = "#d8b4fe"
+                    
+                    if h_p0 == "x":
+                        self.ax.scatter(row['x_0'], row['y_0'], s=s_size, marker="x",
+                                        c=color_p0, linewidths=5, zorder=10)
+                    else:
+                        self.ax.scatter(row['x_0'], row['y_0'], s=s_size, marker=h_p0,
+                                        facecolors='none', edgecolors=color_p0, 
+                                        linewidths=4, zorder=10)
+                    # Precision Bullseye
+                    self.ax.scatter(row['x_0'], row['y_0'], s=50, color='white', edgecolors='black', zorder=11)
+
+                # --- Highlight P1 (Green) ---
                 if 'x_1' in row and not pd.isna(row['x_1']):
-                    self.ax.scatter(row['x_1'], row['y_1'], s=350, marker="D",
-                                    facecolors='none', edgecolors="#4ade80", 
-                                    linewidths=3, zorder=10)
-                    self.ax.scatter(row['x_1'], row['y_1'], s=50, marker="D",
+                    # Check if P1 is the one specifically lifting or touching down
+                    h_p1 = "x" if (is_up and ("(1)" in action or "ACTION_UP" in action)) else ("o" if is_down else "D")
+                    color_p1 = "#4ade80"
+                    
+                    if h_p1 == "x":
+                        self.ax.scatter(row['x_1'], row['y_1'], s=s_size, marker="x",
+                                        c=color_p1, linewidths=5, zorder=10)
+                    else:
+                        self.ax.scatter(row['x_1'], row['y_1'], s=s_size, marker=h_p1,
+                                        facecolors='none', edgecolors=color_p1, 
+                                        linewidths=4, zorder=10)
+                    # Precision Bullseye
+                    self.ax.scatter(row['x_1'], row['y_1'], s=50, marker=h_p1 if h_p1 != "x" else "o",
                                     color='white', edgecolors='black', zorder=11)
             except IndexError:
-                pass                            
-        # Use draw_idle() for smoother real-time performance
+                pass
+
+        # --- ADD EXTERNAL LEGEND ---
+
+        # 1. Define the icons for the legend
+
+        # We use empty scatter plots or Line2D objects as "Proxies"
+        legend_elements = [
+            # Action Icons
+            Patch(facecolor='#d8b4fe', edgecolor='#af7ac5', label='Pointer 0 (Purple)'),
+            Line2D([0], [0], marker='o', color='#d8b4fe', label='Touch Down (pointer 0)', markerfacecolor='#d8b4fe', markersize=15, markeredgecolor='#af7ac5', linestyle='None'),
+            Line2D([0], [0], marker='x', color='#d8b4fe', label='Lift Off (pointer 0)', markersize=15, markeredgewidth=5, linestyle='None'),
+            
+            Patch(facecolor='#4ade80', edgecolor='#27ae60', label='Pointer 1 (Green)'),
+            Line2D([0], [0], marker='x', color='#4ade80', label='Lift Off (pointer 1)', markersize=15, markeredgewidth=5, linestyle='None'),
+            Line2D([0], [0], marker='D', color='#4ade80', label='Move (pointer 1)', markerfacecolor='#4ade80', markersize=8, markeredgecolor='#27ae60', linestyle='None')
+
+        ]
+
+        # 2. Place the legend outside the plotting area
+        leg = self.ax.legend(
+            handles=legend_elements, 
+            loc='upper left', 
+            bbox_to_anchor=(1.02, 1.0), # Bring it closer to the graph edge
+            borderaxespad=0,
+            title="Touch Key", 
+            fontsize=9,
+            frameon=True,
+            facecolor='#f8f9fa',
+            # --- VERTICAL SPACING ---
+            labelspacing=2,        # High vertical gap for clarity
+            handletextpad=1.0,     # Space between icon and text
+            borderpad=1.2          # Internal padding
+        )
+        
+        # Apply Bold Weight to the title
+        leg.get_title().set_fontweight('bold')
+        leg.get_title().set_fontsize(10)
+        
+        # --- KILL WHITE SPACE ---
+        # 0.88 means the graph takes up 88% of the width, leaving just enough for the legend
+        self.fig.subplots_adjust(right=0.98, left=0.08, top=0.92, bottom=0.12)        
+        # Adjust layout to make room for the legend
+        self.fig.tight_layout(rect=[0, 0, 0.98, 1])
+
         self.canvas_widget.draw_idle()
-
-
+    
     def clear_data(self):
         self.all_events = []; self.terminal.delete('1.0', tk.END); self.slider_var.set(0); self.update_plot()
         if os.path.exists(self.log_file): open(self.log_file, "w").close()
@@ -433,17 +510,27 @@ class MotionVisualizer:
             messagebox.showinfo("Success", f"Exported to {os.path.basename(path)}")
 
     def on_pick(self, event):
-        ind = event.ind[0]
-        limit = int(self.slider_var.get())
-        df = pd.DataFrame(self.all_events).iloc[:limit + 1]
-        self.selected_point_idx = df.iloc[ind]['timestamp_order']
-        
-        self.sync_terminal_to_selection()
-        self.update_plot()
+        self.pick_lock = True
+        self.root.after(100, lambda: setattr(self, 'pick_lock', False))
 
-        self.pick_lock = True 
-        self.root.after(100, self.reset_pick_lock)
-
+        try:
+            # 1. Get the list of global indices we attached to this scatter plot
+            full_indices = event.artist.get_gid()
+            
+            if full_indices is not None:
+                # 2. Get the specific index for the dot that was clicked
+                # event.ind[0] is the local index, full_indices maps it to global
+                actual_global_idx = full_indices[event.ind[0]]
+                
+                # 3. Set the selection to that exact global row
+                picked_row = self.all_events[actual_global_idx]
+                self.selected_point_idx = int(picked_row['timestamp_order'])
+                
+                self.sync_terminal_to_selection()
+                self.update_plot()
+        except Exception as e:
+            print(f"Pick Error: {e}")
+            
     def reset_pick_lock(self):
         self.pick_lock = False
 
