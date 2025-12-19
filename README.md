@@ -25,21 +25,40 @@ Use the provided requirements file to install all necessary libraries (`matplotl
 py -m pip install -r requirements.txt
 ```
 
-## 🚀 Usage (Two-Terminal Workflow)
+## 🚀 Usage
 
+### Real-time data logging
 For the best real-time experience on Windows, run data collection and visualization in separate terminals to avoid ADB pipe buffering issues.
 
-### Terminal 1: Data Collection
+#### Terminal 1: Data Collection
 Connect your device and stream sensor logs to a local file:
 ```bash
 adb logcat -s MicroXrInputService:* > live_data.txt
 ```
 
-### Terminal 2: Visualization
+#### Terminal 2: Visualization
 Run the Python suite:
 ```bash
 $env:PYTHONUNBUFFERED=1; py .\log_parser.py
 ```
+
+> [!WARNING]
+> Make sure that both terminals are executed from the same file path OR that the file the data is saved to in terminal one is in the same path as the python visualization file
+
+### Data visualization from a logfile
+This is a one terminal operation, all that is needed is pre-recorded data in a .txt file 
+
+### Pre-recorded data requirements
+Collect data using `adb logcat -s MicroXrInputService:*`
+Store it into a .txt file
+Save said text file in the **same** location as the visualizer
+
+### How to run the script
+Open a terminal and run `cat your_file_name.txt | ./log_parser.py`
+
+> [!NOTE]
+> Make sure that the terminal is executed from the same file path OR that the file the data is saved to AND the file you are calling in the terminal is in the same path as the python visualization file 
+
 
 ## ⚙️ Configuration
 * **X/Y MAX:** Adjust coordinates (default 1600x306) in the top bar to scale the plot grid instantly.
