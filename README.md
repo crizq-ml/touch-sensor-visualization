@@ -2,6 +2,11 @@
 
 A high-performance, real-time visualization suite for Android MotionEvents. This tool parses raw logs from the Infineon touch chip and renders multi-touch coordinate paths with temporal fading and coordinate-based gradients.
 
+The app can operate real time or using saved data.
+
+> [✨Newest feature includes a dashboard to launch the plotting GUI and data collection from one panel!✨]
+> To run this feature, see "Installation (post-shortcut)" below
+
 
 
 ## ✨ Features
@@ -11,7 +16,16 @@ A high-performance, real-time visualization suite for Android MotionEvents. This
 * **Smart Filenaming:** CSVs and PNGs are automatically suggested with filenames based on the exact start time of the session.
 * **Syntax Highlighting:** Raw logs in the terminal are color-coded (Purple for `x[0]`, Green for `x[1]`, Blue for `action`) for instant debugging.
 
-## 🛠 Installation
+## 🛠 Installation (post-shortcut)
+
+1. **Download the folder** from https://github.com/crizq-ml/touch-sensor-visualization.git
+
+2. **Unzip the file**
+
+3. **Double click on the shortcut called "Controller App"**
+
+
+## 🛠 Installation (pre-shortcut)
 
 1. **Clone the repository:**
 ```bash
