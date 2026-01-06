@@ -21,6 +21,7 @@ function Start-MyProcess {
     param([string]$Name, [string]$Command)
     $p = New-Object System.Diagnostics.Process
     $p.StartInfo.FileName = "powershell.exe"
+    # We use -WindowStyle Hidden to keep it invisible. 
     $p.StartInfo.Arguments = "-WindowStyle Hidden -Command `"$Command`"" 
     $p.StartInfo.WorkingDirectory = $scriptPath
     $p.Start() | Out-Null
@@ -30,7 +31,8 @@ function Start-MyProcess {
 function Stop-MyProcess {
     param([System.Diagnostics.Process]$Proc)
     if ($Proc -ne $null -and -not $Proc.HasExited) {
-        Stop-Process -Id $Proc.Id -Force -ErrorAction SilentlyContinue
+        # Force Kill Tree (Window + Python/ADB)
+        Start-Process "taskkill" -ArgumentList "/F /T /PID $($Proc.Id)" -WindowStyle Hidden
     }
 }
 
@@ -66,43 +68,21 @@ $form.Controls.Add($lblHeaderDiv)
 # --- ROUNDED BUTTON FUNCTION ---
 function New-RoundedButton {
     param([string]$Text, [string]$ColorHex, [int]$Top, [scriptblock]$OnClick)
-
     $realColor = [System.Drawing.ColorTranslator]::FromHtml($ColorHex)
     $btn = New-Object System.Windows.Forms.Button
-    $btn.Text = $Text
-    $btn.Location = New-Object System.Drawing.Point(40, $Top)
-    $btn.Size = New-Object System.Drawing.Size(220, 45)
-    
-    $btn.BackColor = $realColor
-    $btn.FlatStyle = "Flat"
-    $btn.FlatAppearance.BorderSize = 0
-    $btn.ForeColor = "White"
-    $btn.Font = New-Object System.Drawing.Font("Segoe UI", 11, [System.Drawing.FontStyle]::Bold)
-    $btn.Cursor = [System.Windows.Forms.Cursors]::Hand
-    $btn.UseVisualStyleBackColor = $false 
+    $btn.Text = $Text; $btn.Location = New-Object System.Drawing.Point(40, $Top); $btn.Size = New-Object System.Drawing.Size(220, 45)
+    $btn.BackColor = $realColor; $btn.FlatStyle = "Flat"; $btn.FlatAppearance.BorderSize = 0; $btn.ForeColor = "White"
+    $btn.Font = New-Object System.Drawing.Font("Segoe UI", 11, [System.Drawing.FontStyle]::Bold); $btn.Cursor = [System.Windows.Forms.Cursors]::Hand; $btn.UseVisualStyleBackColor = $false 
 
     $paintScript = {
         param($sender, $e)
-        $g = $e.Graphics
-        $g.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::AntiAlias
-        $g.TextRenderingHint = [System.Drawing.Text.TextRenderingHint]::ClearTypeGridFit
-
-        $rect = $sender.ClientRectangle; $rect.Width -= 1; $rect.Height -= 1
-        $radius = 20
+        $g = $e.Graphics; $g.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::AntiAlias; $g.TextRenderingHint = [System.Drawing.Text.TextRenderingHint]::ClearTypeGridFit
+        $rect = $sender.ClientRectangle; $rect.Width -= 1; $rect.Height -= 1; $radius = 20
         $path = New-Object System.Drawing.Drawing2D.GraphicsPath
-        $path.AddArc($rect.X, $rect.Y, $radius, $radius, 180, 90)
-        $path.AddArc($rect.Right - $radius, $rect.Y, $radius, $radius, 270, 90)
-        $path.AddArc($rect.Right - $radius, $rect.Bottom - $radius, $radius, $radius, 0, 90)
-        $path.AddArc($rect.X, $rect.Bottom - $radius, $radius, $radius, 90, 90)
-        $path.CloseFigure()
-        
-        $sender.Region = New-Object System.Drawing.Region($path)
-        $brush = New-Object System.Drawing.SolidBrush($realColor)
-        $g.FillPath($brush, $path)
-        
-        $stringFormat = New-Object System.Drawing.StringFormat
-        $stringFormat.Alignment = "Center"
-        $stringFormat.LineAlignment = "Center"
+        $path.AddArc($rect.X, $rect.Y, $radius, $radius, 180, 90); $path.AddArc($rect.Right - $radius, $rect.Y, $radius, $radius, 270, 90)
+        $path.AddArc($rect.Right - $radius, $rect.Bottom - $radius, $radius, $radius, 0, 90); $path.AddArc($rect.X, $rect.Bottom - $radius, $radius, $radius, 90, 90); $path.CloseFigure()
+        $sender.Region = New-Object System.Drawing.Region($path); $brush = New-Object System.Drawing.SolidBrush($realColor); $g.FillPath($brush, $path)
+        $stringFormat = New-Object System.Drawing.StringFormat; $stringFormat.Alignment = "Center"; $stringFormat.LineAlignment = "Center"
         [System.Drawing.RectangleF]$rectF = $rect
         $g.DrawString($sender.Text, $sender.Font, [System.Drawing.Brushes]::White, $rectF, $stringFormat)
     }
@@ -111,13 +91,16 @@ function New-RoundedButton {
     return $btn
 }
 
-# --- ADD BUTTONS ---
+# --- BUTTONS ---
 
 # 1. Start Stream
-$form.Controls.Add((New-RoundedButton -Text "Start Stream" -ColorHex "#84e793" -Top 90 -OnClick {
+$form.Controls.Add((New-RoundedButton -Text "Start Live Stream" -ColorHex "#84e793" -Top 90 -OnClick {
     
-    # --- [EDIT HERE] STREAM COMMAND ---
-    $cmd = "Write-Host 'Streaming...'; Start-Sleep -Seconds 1000"
+    # --- [THE FIX IS HERE] ---
+    # We use single quotes '...' for the whole string.
+    # We use \" (backslash quote) for the internal quotes.
+    # This prevents the "Unexpected token" error.
+    $cmd = 'cmd /c \"adb logcat -s MicroXrInputService:* > live_data.txt\"'
     
     $global:StreamProcess = Start-MyProcess -Name "Stream" -Command $cmd
     $lblStreamStatus.Text = "Stream: RUNNING"
@@ -125,7 +108,7 @@ $form.Controls.Add((New-RoundedButton -Text "Start Stream" -ColorHex "#84e793" -
 }))
 
 # 2. Stop Stream
-$form.Controls.Add((New-RoundedButton -Text "Stop Stream" -ColorHex "#ff746c" -Top 145 -OnClick {
+$form.Controls.Add((New-RoundedButton -Text "Stop Live Stream" -ColorHex "#ff746c" -Top 145 -OnClick {
     Stop-MyProcess -Proc $global:StreamProcess
     $lblStreamStatus.Text = "Stream: STOPPED"
     $lblStreamStatus.ForeColor = [System.Drawing.ColorTranslator]::FromHtml("#ff746c")
@@ -140,10 +123,10 @@ $lblDiv.Location = New-Object System.Drawing.Point(40, 200)
 $form.Controls.Add($lblDiv)
 
 # 3. Start GUI
-$form.Controls.Add((New-RoundedButton -Text "Start GUI" -ColorHex "#59b6f3" -Top 230 -OnClick {
+$form.Controls.Add((New-RoundedButton -Text "Launch GUI" -ColorHex "#59b6f3" -Top 230 -OnClick {
     
-    # --- [EDIT HERE] GUI COMMAND ---
-    $cmd = "Write-Host 'GUI Running...'; Start-Sleep -Seconds 1000"
+    # This remains simple
+    $cmd = "py -u .\log_parser.py"
     
     $global:GuiProcess = Start-MyProcess -Name "GUI" -Command $cmd
     $lblGuiStatus.Text = "GUI App: RUNNING"
@@ -151,7 +134,7 @@ $form.Controls.Add((New-RoundedButton -Text "Start GUI" -ColorHex "#59b6f3" -Top
 }))
 
 # 4. Stop GUI
-$form.Controls.Add((New-RoundedButton -Text "Stop GUI" -ColorHex "#ff746c" -Top 285 -OnClick {
+$form.Controls.Add((New-RoundedButton -Text "Close GUI" -ColorHex "#ff746c" -Top 285 -OnClick {
     Stop-MyProcess -Proc $global:GuiProcess
     $lblGuiStatus.Text = "GUI App: STOPPED"
     $lblGuiStatus.ForeColor = [System.Drawing.ColorTranslator]::FromHtml("#ff746c")
