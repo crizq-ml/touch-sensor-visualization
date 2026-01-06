@@ -4,9 +4,10 @@ A high-performance, real-time visualization suite for Android MotionEvents. This
 
 The app can operate real time or using saved data.
 
-> [✨Newest feature includes a dashboard to launch the plotting GUI and data collection from one panel!✨]
-> To run this feature, see "Installation (post-shortcut)" below
-
+> [!TIP]
+> **Newest feature includes a dashboard to launch the plotting GUI and data collection from one panel!**
+> 
+> To run this feature, see "Installation (post-shortcut)" below 
 
 
 ## ✨ Features
