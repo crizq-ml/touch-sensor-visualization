@@ -77,7 +77,7 @@ class MotionVisualizer:
         input_box = tk.Frame(self.top_frame, bg="#f1f3f4")
         input_box.pack(side=tk.LEFT)
         
-        # X and Y limit input boxes& labels
+        # X and Y limit input boxes & labels
         tk.Label(input_box, text="X MAX", font=("Segoe UI", 12, "bold"), bg="#f1f3f4", fg="#5f6368").grid(row=0, column=0)
         ttk.Entry(input_box, textvariable=self.x_limit_var, width=8, font=("Segoe UI", 14)).grid(row=0, column=1, padx=10)
         tk.Label(input_box, text="Y MAX", font=("Segoe UI", 12, "bold"), bg="#f1f3f4", fg="#5f6368").grid(row=0, column=2, padx=(10, 0))
@@ -90,6 +90,7 @@ class MotionVisualizer:
         # Action buttons
         ModernButton(self.top_frame, text="🗑️ CLEAR", color="#ffa3a3", command=self.clear_data).pack(side=tk.RIGHT, padx=5)
         ModernButton(self.top_frame, text="📁 EXPORT CSV", color="#f4ff91", command=self.export_csv).pack(side=tk.RIGHT, padx=5)
+        ModernButton(self.top_frame, text="📥 IMPORT SESSION", color="#91ff91", command=self.import_session).pack(side=tk.RIGHT, padx=5)
         ModernButton(self.top_frame, text="📷 SAVE PNG", color="#91faff", command=self.save_plot).pack(side=tk.RIGHT, padx=5)
         ModernButton(self.top_frame, text="📋 COPY PNG", color="#ff91fa", command=self.copy_to_clipboard).pack(side=tk.RIGHT, padx=5)
 
@@ -103,6 +104,7 @@ class MotionVisualizer:
         self.fig.canvas.mpl_connect('pick_event', self.on_pick)
         self.fig.canvas.mpl_connect('scroll_event', self.on_scroll)
         self.fig.canvas.mpl_connect('button_press_event', self.on_canvas_click)
+        self.fig.canvas.mpl_connect('key_press_event', self.on_key_press)
         self.canvas_widget = FigureCanvasTkAgg(self.fig, master=self.card_frame)
         self.canvas_widget.get_tk_widget().pack(fill=tk.BOTH, expand=True)
         self.paned_window.add(self.card_frame, minsize=400)
@@ -141,6 +143,8 @@ class MotionVisualizer:
         self.process_queue()
 
     def toggle_play(self):
+
+        # Toggle status
         self.is_playing = not self.is_playing
         
         if self.is_playing:
@@ -154,9 +158,12 @@ class MotionVisualizer:
             # 3. Physically paint the button now
             self.play_btn.itemconfig("button", fill="#ffa3a3")
             
+            # deal with end value (wraparound)
             if self.slider_var.get() >= len(self.all_events) - 1:
                 self.slider_var.set(0)
+
             self.run_realtime_autoplay()
+        
         else:
             # 1. Update the label
             self.play_btn.itemconfig("text", text="▶ PLAY")
@@ -169,24 +176,31 @@ class MotionVisualizer:
             self.play_btn.itemconfig("button", fill="#91faff")
         
     def run_realtime_autoplay(self):
+
         """Calculates the time difference between events to play back at true speed."""
+
         if not self.is_playing:
             return
 
+        # Get current point (deal with wraparound)
         curr_idx = int(self.slider_var.get())
         if curr_idx < len(self.all_events) - 1:
+
             # Determine how long to wait before the next point
             t1 = self.all_events[curr_idx]['pc_time']
             t2 = self.all_events[curr_idx + 1]['pc_time']
-            # Convert to ms, capped at 1.5s to avoid boring long pauses
-            wait_ms = int(min((t2 - t1) * 1000, 1500))
+
+            # Convert to ms, capped at 1.1s to avoid boring long pauses
+            wait_ms = int(min((t2 - t1) * 1000, 1100))
             
+            # Set slider to next index, update plot
             self.slider_var.set(curr_idx + 1)
             self.update_plot()
             self.root.after(wait_ms, self.run_realtime_autoplay)
+
         else:
             self.is_playing = False
-            self.play_btn.config(text="▶ PLAY", bg="#91faff")
+            self.play_btn.itemconfig("text", text="▶ PLAY", bg="#91faff")
 
     def on_slider_move(self, event):
         total = len(self.all_events)
@@ -388,11 +402,13 @@ class MotionVisualizer:
             # Action Icons
             Patch(facecolor='#d8b4fe', edgecolor='#af7ac5', label='Pointer 0 (Purple)'),
             Line2D([0], [0], marker='o', color='#d8b4fe', label='Touch Down (pointer 0)', markerfacecolor='#d8b4fe', markersize=15, markeredgecolor='#af7ac5', linestyle='None'),
+            Line2D([0], [0], marker='o', color='#d8b4fe', label='Move (pointer 0)', markerfacecolor='#d8b4fe', markersize=8, markeredgecolor='#af7ac5', linestyle='None'),
             Line2D([0], [0], marker='x', color='#d8b4fe', label='Lift Off (pointer 0)', markersize=15, markeredgewidth=5, linestyle='None'),
             
             Patch(facecolor='#4ade80', edgecolor='#27ae60', label='Pointer 1 (Green)'),
-            Line2D([0], [0], marker='x', color='#4ade80', label='Lift Off (pointer 1)', markersize=15, markeredgewidth=5, linestyle='None'),
-            Line2D([0], [0], marker='D', color='#4ade80', label='Move (pointer 1)', markerfacecolor='#4ade80', markersize=8, markeredgecolor='#27ae60', linestyle='None')
+            Line2D([0], [0], marker='D', color='#4ade80', label='Touch Down (pointer 1)', markerfacecolor='#4ade80', markersize=15, markeredgecolor='#27ae60', linestyle='None'),
+            Line2D([0], [0], marker='D', color='#4ade80', label='Move (pointer 1)', markerfacecolor='#4ade80', markersize=8, markeredgecolor='#27ae60', linestyle='None'),
+            Line2D([0], [0], marker='x', color='#4ade80', label='Lift Off (pointer 1)', markersize=15, markeredgewidth=5, linestyle='None')
 
         ]
 
@@ -417,7 +433,7 @@ class MotionVisualizer:
         leg.get_title().set_fontsize(10)
         
         # --- KILL WHITE SPACE ---
-        # 0.88 means the graph takes up 88% of the width, leaving just enough for the legend
+        # 0.88: graph takes up 88% of the width, leaving just enough for the legend
         self.fig.subplots_adjust(right=0.98, left=0.08, top=0.92, bottom=0.12)        
         # Adjust layout to make room for the legend
         self.fig.tight_layout(rect=[0, 0, 0.98, 1])
@@ -426,7 +442,7 @@ class MotionVisualizer:
     
     def clear_data(self):
         self.all_events = []; self.terminal.delete('1.0', tk.END); self.slider_var.set(0); self.update_plot()
-        if os.path.exists(self.log_file): open(self.log_file, "w").close()
+        # if os.path.exists(self.log_file): open(self.log_file, "w").close()
 
     def get_timestamp_filename(self, extension):
         """Generates a filename based on the first data point's timestamp."""
@@ -509,6 +525,73 @@ class MotionVisualizer:
             pd.DataFrame(self.all_events).to_csv(path, index=False)
             messagebox.showinfo("Success", f"Exported to {os.path.basename(path)}")
 
+    def import_session(self):
+        # Open file dialog for both types
+        path = filedialog.askopenfilename(
+            filetypes=[("Touch Data", "*.csv *.txt"), ("CSV Files", "*.csv"), ("Text Logs", "*.txt")],
+            title="Import Touch Session"
+        )
+        if not path: return
+
+        try:
+            self.clear_data()
+            filename = os.path.basename(path)
+            
+            if path.endswith('.csv'):
+                # --- CSV LOGIC ---
+                df = pd.read_csv(path)
+                self.all_events = df.to_dict('records')
+                self.terminal.insert(tk.END, f"--- RECONSTRUCTING LOG FROM {filename} ---\n\n")
+                
+                for row in self.all_events:
+                    # Reconstruct line for terminal display/syncing
+                    p0 = f"x[0]={row.get('x_0', 0)}, y[0]={row.get('y_0', 0)}"
+                    p1 = f", x[1]={row.get('x_1', '')}, y[1]={row.get('y_1', '')}" if not pd.isna(row.get('x_1')) else ""
+                    line = f"MotionEvent {{ action={row.get('action', 'MOVE')}, {p0}{p1}, eventId={row.get('eventId', '0')} }}\n"
+                    
+                    start_ptr = self.terminal.index("end-1c")
+                    self.terminal.insert(tk.END, line)
+                    self._apply_terminal_tags(line, start_ptr) # Helper for highlighting
+
+            else:
+                # --- TXT LOGIC ---
+                self.terminal.insert(tk.END, f"--- PARSING RAW LOG FROM {filename} ---\n\n")
+                with open(path, 'r') as f:
+                    for line in f:
+                        # Insert into terminal
+                        start_ptr = self.terminal.index("end-1c")
+                        self.terminal.insert(tk.END, line)
+                        self._apply_terminal_tags(line, start_ptr)
+                        
+                        # Parse and add to data list
+                        parsed = self.parse_line(line)
+                        if parsed:
+                            self.all_events.append(parsed)
+
+            # --- COMMON UI UPDATES ---
+            total = len(self.all_events)
+            self.slider.config(to=max(0, total - 1))
+            self.slider_var.set(total - 1)
+            self.counter_label.config(text=f"{total-1} / {total-1}")
+            self.is_live = False 
+            self.update_plot()
+            messagebox.showinfo("Success", f"Loaded {total} events from {filename}")
+
+        except Exception as e:
+            messagebox.showerror("Import Error", f"Failed to load file: {e}")
+
+    def _apply_terminal_tags(self, line, start_ptr):
+        """Helper to keep highlighting consistent across live and imported data."""
+        act = re.search(r'action=[^, ]+', line)
+        if act:
+            self.terminal.tag_add("action", f"{start_ptr} + {act.start()}c", f"{start_ptr} + {act.end()}c")
+        
+        for m in re.finditer(r'[xy]\[0\]=[^, ]+', line):
+            self.terminal.tag_add("x0", f"{start_ptr} + {m.start()}c", f"{start_ptr} + {m.end()}c")
+
+        for m in re.finditer(r'[xy]\[1\]=[^, ]+', line):
+            self.terminal.tag_add("x1", f"{start_ptr} + {m.start()}c", f"{start_ptr} + {m.end()}c")
+
     def on_pick(self, event):
         self.pick_lock = True
         self.root.after(100, lambda: setattr(self, 'pick_lock', False))
@@ -569,6 +652,32 @@ class MotionVisualizer:
         # 3. Update Terminal and Graph
         self.sync_terminal_to_selection()
         self.update_plot()
+
+    def on_key_press(self, event):
+        """Allows using Up/Down arrow keys to navigate events when a point is selected."""
+        if self.selected_point_idx is None or not self.all_events:
+            return
+
+        # Map keys to directions
+        if event.key == 'up':
+            direction = -1
+        elif event.key == 'left':
+            direction = -1
+        elif event.key == 'down':
+            direction = 1
+        elif event.key == 'right':
+            direction = 1
+        else:
+            return # Ignore other keys
+
+        new_idx = self.selected_point_idx + direction
+        
+        # Constraints: Stay within 0 and the current slider limit
+        limit = int(self.slider_var.get())
+        if 0 <= new_idx <= limit:
+            self.selected_point_idx = new_idx
+            self.sync_terminal_to_selection()
+            self.update_plot()
         
     def sync_terminal_to_selection(self):
         """Finds the selected point's data and highlights it in the terminal."""
