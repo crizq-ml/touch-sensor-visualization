@@ -23,8 +23,34 @@ The app can operate real time or using saved data.
 
 2. **Unzip the file**
 
-3. **Double click on the shortcut called "Controller App"**
+3. **Open the file called controller.ps1 & copy its contents**
 
+4. **Create a new file in the same folder called mycontroller.ps1 and paste the contents there**
+
+5. **Run the controller1.ps1 using powershell by:**
+    a. opening a terminal within the downloaded folder & running `./mycontroller.ps1`
+    b. right click `mycontroller.ps1` and select `run using Windows Powershell`
+
+    > [!WARNING]
+    > DO NOT RUN controller.ps1 it will cause a CORTEX XDR ALERT
+    > This is because github is not a "trusted" source & that is how we are sharing this program, I am working with IT to resolve this issue
+
+** If you would like:**
+You can create a shortcut that runs the controller app
+
+1. **Right click on `mycontroller.ps1` & select Create shortcut**
+
+2. **Right click `mycontroller - Shortcut` & select properties**
+
+3. **Change the target to include `%SystemRoot%\system32\WindowsPowerShell\v1.0\powershell.exe -WindowStyle hidden -ExecutionPolicy Bypass -File ` before the filename**
+    
+    eg: `C:\Users\lab\Downloads\touch-sensor-visualization-main\mycontroller.ps1` 
+    
+    turns into 
+    
+    `%SystemRoot%\system32\WindowsPowerShell\v1.0\powershell.exe -WindowStyle hidden -ExecutionPolicy Bypass -File "C:\Users\lab\Downloads\touch-sensor-visualization-main\mycontroller.ps1"`
+
+4. **Double click on the shortcut called "Controller App"**
 
 ## 🛠 Installation (pre-shortcut)
 
