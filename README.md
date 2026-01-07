@@ -17,42 +17,49 @@ The app can operate real time or using saved data.
 * **Smart Filenaming:** CSVs and PNGs are automatically suggested with filenames based on the exact start time of the session.
 * **Syntax Highlighting:** Raw logs in the terminal are color-coded (Purple for `x[0]`, Green for `x[1]`, Blue for `action`) for instant debugging.
 
-## 🛠 Installation (post-shortcut)
+## 🛠 Installation (with controller app)
 
-1. **Download the folder** from https://github.com/crizq-ml/touch-sensor-visualization.git
+1. **Download the folder** from https://github.com/crizq-ml/touch-sensor-visualization.git & unzip
 
-2. **Unzip the file**
+    **OR clone from github** using `git clone https://github.com/crizq-ml/touch-sensor-visualization.git`
 
-3. **Open the file called controller.ps1 & copy its contents**
+2. **Open a terminal within the downloaded/cloned folder & install dependecies by:**
+    
+    Using the provided requirements file to install all necessary libraries (`matplotlib`, `seaborn`, `pandas`, and `numpy`).
 
-4. **Create a new file in the same folder called mycontroller.ps1 and paste the contents there**
-
-5. **Run the controller1.ps1 using powershell by:**
-    a. opening a terminal within the downloaded folder & running `./mycontroller.ps1`
-    b. right click `mycontroller.ps1` and select `run using Windows Powershell`
+    ```bash
+    py -m pip install -r requirements.txt
+    ```
 
     > [!WARNING]
-    > DO NOT RUN controller.ps1 it will cause a CORTEX XDR ALERT
-    > This is because github is not a "trusted" source & that is how we are sharing this program, I am working with IT to resolve this issue
+    > IF YOU DO NOT HAVE PYTHON 3.14 INSTALLED, THIS WILL NOT WORK
+    > So please install python **3.14** from the python installer [here](https://www.python.org/downloads/windows/) first
 
-** If you would like:**
-You can create a shortcut that runs the controller app
-
-1. **Right click on `mycontroller.ps1` & select Create shortcut**
-
-2. **Right click `mycontroller - Shortcut` & select properties**
-
-3. **Change the target to include `%SystemRoot%\system32\WindowsPowerShell\v1.0\powershell.exe -WindowStyle hidden -ExecutionPolicy Bypass -File ` before the filename**
+3. **Run the controller.ps1 using powershell by:**
     
-    eg: `C:\Users\lab\Downloads\touch-sensor-visualization-main\mycontroller.ps1` 
+    a. opening a terminal **within the downloaded folder** & running `./controller.ps1`
+    
+    b. right click `controller.ps1` in **📂 File Explorer** and select `run using Windows Powershell`
+
+### If you would like to create a shortcut to run the app
+
+1. Right click on `controller.ps1` & select **create shortcut**
+
+2. Right click `controller - Shortcut` & select **properties**
+
+3. Change the **target** to include `%SystemRoot%\system32\WindowsPowerShell\v1.0\powershell.exe -WindowStyle hidden -ExecutionPolicy Bypass -File ` ***before the filename***
+    
+    ``` bash
+    eg: C:\Users\lab\Downloads\touch-sensor-visualization-main\mycontroller.ps1
     
     turns into 
     
-    `%SystemRoot%\system32\WindowsPowerShell\v1.0\powershell.exe -WindowStyle hidden -ExecutionPolicy Bypass -File "C:\Users\lab\Downloads\touch-sensor-visualization-main\mycontroller.ps1"`
+    %SystemRoot%\system32\WindowsPowerShell\v1.0\powershell.exe -WindowStyle hidden -ExecutionPolicy Bypass -File "C:\Users\lab\Downloads\touch-sensor-visualization-main\mycontroller.ps1"
+    ```
 
-4. **Double click on the shortcut called "Controller App"**
+4. Rename the shortcut to `Controller App` or whatever you like then double click to open
 
-## 🛠 Installation (pre-shortcut)
+## 🛠 Installation (without controller app)
 
 1. **Clone the repository:**
 ```bash
