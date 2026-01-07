@@ -31,17 +31,32 @@ The app can operate real time or using saved data.
     py -m pip install -r requirements.txt
     ```
 
-    > [!WARNING]
-    > IF YOU DO NOT HAVE PYTHON 3.14 INSTALLED, THIS WILL NOT WORK
-    > So please install python **3.14** from the python installer [here](https://www.python.org/downloads/windows/) first
+ > [!WARNING]
+ > IF YOU DO NOT HAVE PYTHON 3.14 INSTALLED, THIS WILL NOT WORK
+ > So please install python **3.14** from the python installer [here](https://www.python.org/downloads/windows/) first
 
-3. **Run the controller.ps1 using powershell by:**
-    
-    a. opening a terminal **within the downloaded folder** & running `./controller.ps1`
-    
-    b. right click `controller.ps1` in **📂 File Explorer** and select `run using Windows Powershell`
+## 🚀 Usage (with controller app)
 
-### If you would like to create a shortcut to run the app
+### ⏯️ To run the controller.ps1 **using powershell**
+    
+Open a terminal **within the downloaded folder** & run `./controller.ps1`
+
+   OR
+   
+Right click `controller.ps1` in **📂 File Explorer** and select `run using Windows Powershell`
+
+### 🎤 To plot LIVE data
+1. Connect your device
+2. Press the top green 🟩 **Start Live Stream** button
+3. Press the blue 🟦 **Launch GUI** button & wait for the GUI to pop up
+4. Close the stream or GUI at any time using the red 🟥 **Stop Live Stream** or 🟥 **Close GUI** buttons
+5. Close out of the controller by pressing x
+
+### 🗃️ To plot saved data
+1. Press the blue 🟦 **Launch GUI** button & wait for the GUI to pop up
+2. Press the green 🟩 **Import Session** button in the top right
+
+### 🩳 If you would like to create a shortcut to run the app
 
 1. Right click on `controller.ps1` & select **create shortcut**
 
@@ -58,6 +73,24 @@ The app can operate real time or using saved data.
     ```
 
 4. Rename the shortcut to `Controller App` or whatever you like then double click to open
+
+## ⚙️ Configuration
+* **X/Y MAX:** Adjust coordinates (default 1600x306) in the top bar to scale the plot grid instantly.
+* **▶ PLAY / ⏸ PAUSE:** Replay the current session in real-time.
+* **📁 EXPORT CSV / 📷 SAVE PNG:** Saves session data with a default timestamped filename (e.g., `TouchLog_20251218-145127.csv`).
+
+## ❓ Troubleshooting
+* **Graph isn't updating**
+Ensure the slider is pushed to the far right. If you move it back to look at history, the "Live" follow mode is disabled. To re-enable it, simply slide back to the end or click the CLEAR button.
+* **Permission Error**
+Do not worry about this error, it just happens because the adb logcat in the other terminal locks the txt file so the python script can't modify it.
+* **Crashing error (without controller app)**
+You must close the app using Ctrl + C in the terminal used to open the python app rather than using the lose button in the top right. If you do not, the terminal will freeze. If this happens, just delete the terminal and open a new one.
+
+
+***
+## 🚩 EVERYTHING BELOW THIS LINE APPLIES TO USING NEXUS WITHOUT THE CONTROLLER APP 🚩
+***
 
 ## 🛠 Installation (without controller app)
 
@@ -106,17 +139,3 @@ Open a terminal and run `cat your_file_name.txt | ./log_parser.py`
 
 > [!NOTE]
 > Make sure that the terminal is executed from the same file path OR that the file the data is saved to AND the file you are calling in the terminal is in the same path as the python visualization file 
-
-
-## ⚙️ Configuration
-* **X/Y MAX:** Adjust coordinates (default 1600x306) in the top bar to scale the plot grid instantly.
-* **▶ PLAY / ⏸ PAUSE:** Replay the current session in real-time.
-* **📁 EXPORT CSV / 📷 SAVE PNG:** Saves session data with a default timestamped filename (e.g., `TouchLog_20251218-145127.csv`).
-
-## ❓ Troubleshooting
-**Graph isn't updating:**
-Ensure the slider is pushed to the far right. If you move it back to look at history, the "Live" follow mode is disabled. To re-enable it, simply slide back to the end or click the CLEAR button.
-**Permission Error**
-Do not worry about this error, it just happens because the adb logcat in the other terminal locks the txt file so the python script can't modify it.
-**Crashing error**
-You must close the app using Ctrl + C in the terminal used to open the python app rather than using the lose button in the top right. If you do not, the terminal will freeze. If this happens, just delete the terminal and open a new one.
