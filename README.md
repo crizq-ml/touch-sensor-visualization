@@ -73,7 +73,7 @@ Use the provided requirements file to install all necessary libraries (`matplotl
 py -m pip install -r requirements.txt
 ```
 
-## 🚀 Usage
+## 🚀 Usage (without controller app)
 
 ### Real-time data logging
 For the best real-time experience on Windows, run data collection and visualization in separate terminals to avoid ADB pipe buffering issues.
