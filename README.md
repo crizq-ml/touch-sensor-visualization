@@ -7,7 +7,7 @@ The app can operate real time or using saved data.
 > [!TIP]
 > **Newest feature includes a dashboard to launch the plotting GUI and data collection from one panel!**
 > 
-> To run this feature, see "Installation (post-shortcut)" below 
+> To run this feature, see "Installation (with controller app)" below 
 
 
 ## ✨ Features
